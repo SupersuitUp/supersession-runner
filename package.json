@@ -1,0 +1,32 @@
+{
+  "name": "@supersuit/supersession-runner",
+  "version": "0.1.0",
+  "description": "Run agent sessions on a schedule or an event, a few at a time, each one keeping one contract: run the work, fix what broke, improve itself, report once.",
+  "type": "module",
+  "bin": {
+    "supersessions": "bin/supersessions.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SupersuitUp/supersession-runner.git"
+  },
+  "dependencies": {}
+}
