@@ -28,5 +28,8 @@
     "type": "git",
     "url": "git+https://github.com/SupersuitUp/supersession-runner.git"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "publishConfig": {
+    "access": "public"
+  }
 }
