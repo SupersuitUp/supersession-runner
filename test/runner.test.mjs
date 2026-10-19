@@ -120,3 +120,15 @@ test("the contract: run, solve, improve, report once; the host may name its own 
   assert.match(own, /2\. Use my-debugger\.\n\n3\. Use my-improver\./);
   assert.match(contractMessage({ what: "w", job: { unattended: "sh x.sh" }, report: "r", root: "/w" }), /sh x\.sh[\s\S]*Exit 75 means "not now"/);
 });
+
+// A finished session nobody is watching should not stay open: three finished runs of one
+// recurrent sat idle on one Mac on 2026-10-19 until the operator said "This recurrent should close".
+test("the contract: a host's close step comes after the report, and only when it gives one", () => {
+  const plain = contractMessage({ what: "w", job: { prompt: "p" }, report: "r", root: "/w" });
+  assert.match(plain, /4\. Report exactly once, as your last step, then stop:/);
+  assert.doesNotMatch(plain, /\n\n5\./);
+  const closing = contractMessage({ what: "w", job: { prompt: "p" }, report: "r", root: "/w", close: "Close this session with my-closer." });
+  assert.match(closing, /4\. Report exactly once, then close:\n\n {4}r\n/);
+  assert.doesNotMatch(closing, /as your last step, then stop/);
+  assert.match(closing, /\n\n5\. Close this session with my-closer\.$/);
+});

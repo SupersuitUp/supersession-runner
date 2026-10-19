@@ -19,15 +19,19 @@ export const defaultImprove = (file) => `3. Before you finish, improve it. Whate
 
 /**
  * The whole first message. `report` is the exact command the session runs to report;
- * `starter` names what started it; `solve` and `improve(file)` may be the host's own words.
+ * `starter` names what started it; `solve` and `improve(file)` may be the host's own words;
+ * `close`, when given, is a fifth step telling the session how to end itself after it reports.
  */
-export function contractMessage({ what, job, report, file = null, root, extra = "", starter = "The session runner", solve = DEFAULT_SOLVE, improve = defaultImprove }) {
+export function contractMessage({ what, job, report, file = null, root, extra = "", starter = "The session runner", solve = DEFAULT_SOLVE, improve = defaultImprove, close = "" }) {
   return [
     `This is ${what}. ${starter} started this session on its own, with nobody present, so work it through from start to finish without waiting for anyone.`,
     `1. Run it. ${runStep(job, { root })}`,
     ...(extra ? [extra] : []),
     solve,
     improve(file),
-    `4. Report exactly once, as your last step, then stop:\n\n    ${report}\n\nok: it ran and ended green, after your fix if you made one. deferred: it said not now. failed: it is still broken, and the sentence says what the operator needs to know. ok stamps the run and failed sends the operator one notice, so do neither by hand.`,
+    `4. Report exactly once, ${close ? "then close" : "as your last step, then stop"}:\n\n    ${report}\n\nok: it ran and ended green, after your fix if you made one. deferred: it said not now. failed: it is still broken, and the sentence says what the operator needs to know. ok stamps the run and failed sends the operator one notice, so do neither by hand.`,
+    // A host that can end its own sessions says how, so a finished run does not sit open with
+    // nobody watching it. Without one, step 4 stays the last step.
+    ...(close ? [`5. ${close}`] : []),
   ].join("\n\n");
 }
