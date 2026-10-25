@@ -74,6 +74,11 @@ runner.done({ id: 'schedule:investor-update', status: 'ok' })   // what report.m
 `shellGate`), `log`, `lock`, `onNothing`, `onReport` and `migrate` as you need them; every machine
 call is a parameter, so a test never starts a real session.
 
+A gate exits 0 for work (its first line of stdout is handed to the session), 1 for nothing to do,
+and anything else is a `gate-error`: logged with the tail of its stderr, never told to anyone, and
+tried again next tick. `shellGate` runs it through `/bin/sh` with five minutes to finish
+(`GATE_TIMEOUT_MS`); one killed at the limit logs `exit=timeout`, never a made-up exit code.
+
 ## From a terminal
 
 ```bash

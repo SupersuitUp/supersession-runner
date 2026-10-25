@@ -10,7 +10,7 @@
 // A job is { id, kind, name, gate?, on?, at?, stamp?, ... } and the host's own fields. `jobs({ now })`
 // returns { due, all }: what should run now, and every job (for `only` and `done` to find).
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { delimiter, dirname } from "node:path";
 import { spawnSync } from "node:child_process";
 
 export const MAX_SESSIONS = 3;
@@ -19,10 +19,39 @@ export const REPORT_STATUSES = ["ok", "deferred", "failed"];
 
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, "utf8")); } catch { return null; } };
 
-/** A gate run through /bin/sh from `cwd`, a minute at most. { code, out } */
-export function shellGate({ command, cwd }) {
-  const r = spawnSync("/bin/sh", ["-c", command], { cwd, encoding: "utf8", timeout: 60000 });
-  return { code: r.status ?? (r.error ? 127 : 1), out: String(r.stdout || "") };
+/**
+ * How long a gate may run. It was a minute until 2026-10-25, and a triage gate reading 23 repos
+ * took 64 seconds, so it was killed on tick after tick and passed only when the network was quick
+ * (supersuit-dev#1052). A tick comes every few minutes and the runner holds its lock meanwhile,
+ * so five minutes is room for a slow scan without letting one wedge the queue for long.
+ */
+export const GATE_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * A gate run through /bin/sh from `cwd`. { code, out, err, timedOut?, timeoutMs? }
+ *
+ * The directory of the node running this is put first on the gate's PATH, so `node` in a gate is
+ * the same node, under a scheduler's minimal PATH (launchd, cron) as at a terminal.
+ *
+ * A gate killed at its limit has no exit status. That used to be reported as 127, "command not
+ * found", which sent the reader looking for a missing binary when the gate was only slow. It is
+ * now 124 (what timeout(1) exits) with `timedOut: true`; a spawn that could not start at all
+ * (no /bin/sh) is still 127.
+ */
+export function shellGate({ command, cwd, env = process.env, timeoutMs = GATE_TIMEOUT_MS }) {
+  const PATH = [dirname(process.execPath), env.PATH].filter(Boolean).join(delimiter);
+  const r = spawnSync("/bin/sh", ["-c", command], { cwd, encoding: "utf8", timeout: timeoutMs, env: { ...env, PATH } });
+  const out = String(r.stdout || ""), err = String(r.stderr || "");
+  if (r.error?.code === "ETIMEDOUT" || (r.status === null && r.signal && r.error)) return { code: 124, out, err, timedOut: true, timeoutMs };
+  return { code: r.status ?? (r.error ? 127 : 1), out, err: err || (r.error ? String(r.error.message || r.error) : "") };
+}
+
+/** The last non-empty lines of a gate's stderr, as one quotable line for a log. */
+export function stderrTail(err, max = 240) {
+  const lines = String(err || "").split("\n").map((l) => l.trim()).filter(Boolean);
+  let tail = lines.slice(-3).join(" | ").replace(/"/g, "'");
+  if (tail.length > max) tail = "..." + tail.slice(-(max - 3));
+  return tail;
 }
 
 const noop = () => {};
@@ -73,8 +102,13 @@ export function createRunner({
         return { id: job.id, slug: job.slug, status: "nothing" };
       }
       if (g.code !== 0) {
-        log(`slug=${job.id} status=gate-error exit=${g.code}`);
-        return { id: job.id, slug: job.slug, status: "gate-error", why: `gate exit ${g.code}` };
+        // Say what broke: a timeout is not a missing command, and the gate's own last words
+        // (stderr) name the missing thing when one is missing (supersuit-dev#1052).
+        const secs = g.timedOut ? `${Math.round((g.timeoutMs || GATE_TIMEOUT_MS) / 1000)}s` : "";
+        const tail = stderrTail(g.err);
+        log(`slug=${job.id} status=gate-error ${g.timedOut ? `exit=timeout after=${secs}` : `exit=${g.code}`}${tail ? ` stderr="${tail}"` : ""}`);
+        const why = [g.timedOut ? `gate timed out after ${secs}` : `gate exit ${g.code}`, tail].filter(Boolean).join(": ");
+        return { id: job.id, slug: job.slug, status: "gate-error", why };
       }
       const line = String(g.out || "").trim().split("\n")[0];
       if (line) extra = `The gate reported: ${line}`;

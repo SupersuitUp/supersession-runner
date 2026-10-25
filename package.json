@@ -1,6 +1,6 @@
 {
   "name": "@supersuit/supersession-runner",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Run agent sessions on a schedule or an event, a few at a time, each one keeping one contract: run the work, fix what broke, improve itself, report once.",
   "type": "module",
   "bin": {
