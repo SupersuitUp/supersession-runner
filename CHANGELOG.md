@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2 (2026-11-14)
+
+- A session that reports while a tick is starting another session stays reported. The tick held
+  the in-flight list it read at its top and saved it after the start, which takes seconds, so a
+  slot `done` had just freed came back and the finished run was told six hours later as "never
+  reported back". Every write the tick makes now re-reads the list first.
+
 ## 0.2.1 (2026-10-25)
 
 - `shellGate` gives a gate five minutes (`GATE_TIMEOUT_MS`), up from one. A gate killed at its
