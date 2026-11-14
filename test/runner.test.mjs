@@ -132,3 +132,27 @@ test("the contract: a host's close step comes after the report, and only when it
   assert.doesNotMatch(closing, /as your last step, then stop/);
   assert.match(closing, /\n\n5\. Close this session with my-closer\.$/);
 });
+
+test("a report that lands while a tick is starting another session stays reported (2026-11-14)", () => {
+  // The tick holds its lock while a session starts, which takes seconds. A session that reports in
+  // that window freed its slot on disk, and the tick then saved the list it had read before, bringing
+  // the slot back; six hours later the finished run was told as "never reported back".
+  const dir = mkdtempSync(join(tmpdir(), "supersessions-race-"));
+  const state = { due: [job("a")] };
+  let r;
+  const notify = [];
+  r = createRunner({
+    inflightFile: join(dir, "inflight.json"),
+    jobs: () => ({ due: state.due, all: [job("a"), job("b")] }),
+    start: ({ job: j }) => { if (j.id === "b") r.done({ id: "a", status: "ok" }); return { ok: true, id: `s-${j.id}` }; },
+    message: (j) => ({ name: j.name, message: "m" }),
+    notify: (ev) => notify.push(ev),
+  });
+  r.tick({ now: at("2026-11-14", 9) });
+  state.due = [job("b")];
+  r.tick({ now: at("2026-11-14", 9, 35) });
+  assert.deepEqual(JSON.parse(readFileSync(join(dir, "inflight.json"), "utf8")).sessions.map((s) => s.id), ["b"], "a reported mid-tick; only b is in flight");
+  state.due = [];
+  r.tick({ now: at("2026-11-14", 15, 30) });
+  assert.equal(notify.length, 0, "a finished run is never told as one that never reported back");
+});

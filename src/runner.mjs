@@ -88,6 +88,11 @@ export function createRunner({
     mkdirSync(dirname(inflightFile), { recursive: true });
     writeFileSync(inflightFile, JSON.stringify({ sessions }, null, 2) + "\n");
   };
+  // Every write re-reads the list first. The tick holds its lock for seconds while a session starts,
+  // and `done` takes no lock, so a list read at the top of the tick is stale by its end: saving it
+  // would bring back the slot of a session that reported in between, and six hours later that
+  // finished run was told as "never reported back" (2026-11-14, triage-my-signals).
+  const update = (fn) => { const next = fn(load()); save(next); return next; };
   const tell = (ev) => { try { const p = notify(ev); if (p && typeof p.catch === "function") p.catch(noop); } catch { /* the log still has it */ } };
 
   function startJob(job, now) {
@@ -145,9 +150,8 @@ export function createRunner({
           body: `Its session (${x.session}) started ${x.startedAt} and did not finish within ${staleMs / 3600000} hours. Open it to see where it stopped. It tries again at its next turn.`,
         });
       }
-      const fresh = inflight.filter((e) => now - new Date(e.startedAt) < staleMs);
-      if (fresh.length !== inflight.length) save(fresh);
-      inflight = fresh;
+      const isFresh = (e) => now - new Date(e.startedAt) < staleMs;
+      inflight = inflight.every(isFresh) ? inflight : update((cur) => cur.filter(isFresh));
       const busy = new Set(inflight.map((e) => e.id));
 
       let set;
@@ -168,8 +172,8 @@ export function createRunner({
         const out = startJob(j, now);
         runs.push(out);
         if (out.status === "started") {
-          inflight.push({ id: j.id, kind: j.kind, name: j.name, marker: j.marker ?? null, session: out.session, startedAt: now.toISOString() });
-          save(inflight);
+          const entry = { id: j.id, kind: j.kind, name: j.name, marker: j.marker ?? null, session: out.session, startedAt: now.toISOString() };
+          inflight = update((cur) => [...cur.filter((x) => x.id !== j.id), entry]);
         }
       }
       return { runs };
