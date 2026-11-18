@@ -1,5 +1,5 @@
 // The public API.
-export { MIN_INTERVAL_MS, parseEvery, parseAt, lastOccurrence, parseWindow, inWindow, localDay } from "./when.mjs";
+export { MIN_INTERVAL_MS, parseEvery, parseAt, lastOccurrence, nextOccurrence, deadlineOf, describeEvery, parseWindow, inWindow, localDay } from "./when.mjs";
 export { readLabels, setLabel, labelLine } from "./labels.mjs";
 export { EVENT_NAME, createEvents } from "./events.mjs";
 export { STATUSES, classifyMethod, shapeSchedule, readSchedules, isDue, setScheduleStatus, removeSchedule, addSchedule } from "./schedules.mjs";

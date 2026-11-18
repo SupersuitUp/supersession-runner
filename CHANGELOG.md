@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0 (2026-11-17)
+
+- Monthly rules for Every: a day of the month (`monthly 5 09:00`, `on the 5th 09:00`, `the 15th of
+  every month at 17:30`), the last day (`last day of the month 18:00`), a deadline (`by the 5th
+  09:00`: it runs on the 1st, and a schedule written before the 5th that never ran is owed at once),
+  and an nth weekday (`second thursday 09:00`, `last friday 16:00`). A day past the month's end runs
+  on its last day, so the 31st is February's 28th or 29th. They are read only when the words name a
+  day number, `last`, `by` or an ordinal, which the clock grammar never took, so every phrase that
+  parsed before parses the same (supersuit-dev#3187, #2413).
+- `nextOccurrence(rule, after)`: the first run strictly after a time, for clock and monthly rules,
+  so a host stops writing its own eight-day loop. `lastOccurrence` takes monthly rules.
+- `describeEvery(rule)`: what a rule means in plain words ("on the second Thursday of every month at
+  09:00"). `deadlineOf(rule, occurrence)`: the end of a "by" rule's deadline day.
+
 ## 0.2.2 (2026-11-14)
 
 - A session that reports while a tick is starting another session stays reported. The tick held

@@ -4,6 +4,7 @@
 //
 //   **At:** 2026-10-18 15:00              one time, local
 //   **Every:** 3h | daily 07:00 | weekdays 08:30 | monday 09:00 | mon, thu 18:00
+//              | on the 5th 09:00 | by the 5th 09:00 | last day of the month 18:00 | second thursday 09:00
 //   **On:** <event name>                  once per event
 //   **Gate:** <shell command>             optional: exit 0 = work (its first line is handed over), 1 = nothing to do
 //   **Project:** <name>                   optional: a project the session opens on (what that means is the host's)
@@ -14,7 +15,7 @@
 //   **Status:** active | paused | done
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { parseAt, parseEvery, lastOccurrence, parseWindow, inWindow, localDay } from "./when.mjs";
+import { parseAt, parseEvery, lastOccurrence, deadlineOf, parseWindow, inWindow, localDay } from "./when.mjs";
 import { readLabels, setLabel, labelLine } from "./labels.mjs";
 import { EVENT_NAME } from "./events.mjs";
 
@@ -74,14 +75,17 @@ export function isDue(s, { now = new Date(), attempt = null, hasEvent = false, m
   if (s.status !== "active" || !inWindow(s.window, now)) return false;
   if (s.on) return hasEvent;
   const last = attempt?.startedAt ? new Date(attempt.startedAt) : null;
-  // A clock rule never run waits for its first occurrence AFTER the file was written, so a new
-  // "every Monday 09:00" made on a Sunday does not fire at once for last Monday.
-  const base = last ?? (s.every?.kind === "clock" && s.since ? new Date(s.since) : null);
+  // A clock or monthly rule never run waits for its first occurrence AFTER the file was written, so a
+  // new "every Monday 09:00" made on a Sunday does not fire at once for last Monday.
+  const base = last ?? (s.every && s.every.kind !== "interval" && s.since ? new Date(s.since) : null);
   // "Not now" retries at the next tick, maxDefers times a day, then waits for the next turn.
   const deferredToday = attempt?.status === "deferred" && attempt.day === localDay(now) && (attempt.defers || 0) < maxDefers;
   if (s.at) return now >= s.at && (!last || last < s.at || deferredToday);
   if (s.every.kind === "interval") return !last || now - last >= s.every.ms || deferredToday;
   const occ = lastOccurrence(s.every, now);
+  // "By the 5th" written on the 3rd and never run is owed this month: its deadline has not passed.
+  const deadline = deadlineOf(s.every, occ);
+  if (deadline && !last && base && base <= deadline && now <= deadline) return true;
   return Boolean(occ) && (!base || base < occ || deferredToday);
 }
 

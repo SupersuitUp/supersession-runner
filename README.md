@@ -30,6 +30,7 @@ One Markdown file per job, in a folder a person can read and edit:
 
 **At:** 2026-10-18 15:00              one time, local
 **Every:** 3h | daily 07:00 | weekdays 08:30 | monday 09:00 | mon, thu 18:00
+           | on the 5th 09:00 | by the 5th 09:00 | last day of the month 18:00 | second thursday 09:00
 **On:** pull-request-opened           once per event
 **Gate:** <shell command>             exit 0 = work (its first line is handed over), 1 = nothing to do
 **Method:** /command or words         or a `## Briefing` section for more than one line
@@ -37,7 +38,11 @@ One Markdown file per job, in a folder a person can read and edit:
 **Status:** active | paused | done
 ```
 
-One of At, Every or On says when. A new clock rule waits for its first occurrence after the file
+One of At, Every or On says when. A monthly rule names a day of the month (`monthly 5 09:00`, `on the
+5th 09:00`; a day past the month's end runs on its last day), the last day (`last day of the month
+18:00`), a deadline (`by the 5th 09:00`, which runs on the 1st, and is owed at once when the file is
+written before the 5th), or an nth weekday (`second thursday 09:00`, first to fourth or `last`).
+`describeEvery(parseEvery(text))` says what a rule means in plain words. A new clock rule waits for its first occurrence after the file
 was written; a one-off is the host's to mark done once it reports.
 
 ## Running it
