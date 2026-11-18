@@ -38,9 +38,10 @@ export const GATE_TIMEOUT_MS = 5 * 60 * 1000;
  * now 124 (what timeout(1) exits) with `timedOut: true`; a spawn that could not start at all
  * (no /bin/sh) is still 127.
  */
-export function shellGate({ command, cwd, env = process.env, timeoutMs = GATE_TIMEOUT_MS }) {
+export function shellGate({ command, cwd, env = process.env, timeoutMs = GATE_TIMEOUT_MS, platform = process.platform, spawn = spawnSync }) {
   const PATH = [dirname(process.execPath), env.PATH].filter(Boolean).join(delimiter);
-  const r = spawnSync("/bin/sh", ["-c", command], { cwd, encoding: "utf8", timeout: timeoutMs, env: { ...env, PATH } });
+  // Windows has no /bin/sh that node can start; Git Bash's sh is found on PATH.
+  const r = spawn(platform === "win32" ? "sh" : "/bin/sh", ["-c", command], { cwd, encoding: "utf8", timeout: timeoutMs, env: { ...env, PATH } });
   const out = String(r.stdout || ""), err = String(r.stderr || "");
   if (r.error?.code === "ETIMEDOUT" || (r.status === null && r.signal && r.error)) return { code: 124, out, err, timedOut: true, timeoutMs };
   return { code: r.status ?? (r.error ? 127 : 1), out, err: err || (r.error ? String(r.error.message || r.error) : "") };

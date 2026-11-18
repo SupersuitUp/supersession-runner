@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- A gate now runs on Windows. `shellGate` started `/bin/sh`, which node cannot start there, so every gated job
+  came back as exit 127 and never ran. On Windows it uses the `sh` on PATH (Git Bash).
+
 ## 0.3.1 (2026-11-17)
 
 - `monthly 09:00`, with no day, ran every Monday: the clock's day reader took any word whose first three
