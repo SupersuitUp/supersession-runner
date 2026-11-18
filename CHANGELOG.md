@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 (2026-11-17)
+
+- `monthly 09:00`, with no day, ran every Monday: the clock's day reader took any word whose first three
+  letters were a day, and "monthly" starts with "mon". A bare monthly (`monthly`, `every month`, `each
+  month` with no day) is now refused with a plain message naming the monthly forms (`on the 5th 09:00`,
+  `by the 5th 09:00`, `last day of the month 09:00`, `second thursday 09:00`). A schedule file that says
+  it is reported as a problem, as any unreadable rule is, instead of running four times a month.
+- A day name must be a whole word: the short name, the full name, its plural, or `tues`, `weds`, `thur`,
+  `thurs`. The same prefix read took `sunset`, `sunrise`, `saturn`, `satisfied`, `wedding`, `fridge`,
+  `thunder` and `month` as days, and `second monster` as the second Monday.
+
 ## 0.3.0 (2026-11-17)
 
 - Monthly rules for Every: a day of the month (`monthly 5 09:00`, `on the 5th 09:00`, `the 15th of

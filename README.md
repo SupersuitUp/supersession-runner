@@ -41,7 +41,9 @@ One Markdown file per job, in a folder a person can read and edit:
 One of At, Every or On says when. A monthly rule names a day of the month (`monthly 5 09:00`, `on the
 5th 09:00`; a day past the month's end runs on its last day), the last day (`last day of the month
 18:00`), a deadline (`by the 5th 09:00`, which runs on the 1st, and is owed at once when the file is
-written before the 5th), or an nth weekday (`second thursday 09:00`, first to fourth or `last`).
+written before the 5th), or an nth weekday (`second thursday 09:00`, first to fourth or `last`). A
+bare `monthly 09:00` names no day and is refused, naming these forms. A day name is a whole word
+(`mon`, `monday`, `mondays`, `tues`, `thurs`, ...), so `sunset` or `wedding` is never read as a day.
 `describeEvery(parseEvery(text))` says what a rule means in plain words. A new clock rule waits for its first occurrence after the file
 was written; a one-off is the host's to mark done once it reports.
 

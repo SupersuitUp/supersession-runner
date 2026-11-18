@@ -3,7 +3,19 @@
 
 /** Shorter than this and a schedule is a busy loop, not a schedule. */
 export const MIN_INTERVAL_MS = 5 * 60 * 1000;
-const DAYS = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+/**
+ * Every word that names a day, as a whole word: the short name, the full name, its plural, and the common longer
+ * abbreviations. Never the first three letters of any word: that read "monthly" as Monday, "sunset" as Sunday and
+ * "wedding" as Wednesday.
+ */
+const DAY_WORDS = (() => {
+  const out = {};
+  const forms = [["sun", "sunday"], ["mon", "monday"], ["tue", "tues", "tuesday"], ["wed", "weds", "wednesday"],
+    ["thu", "thur", "thurs", "thursday"], ["fri", "friday"], ["sat", "saturday"]];
+  forms.forEach((names, day) => { for (const n of names) { out[n] = day; out[`${n}s`] = day; } });
+  return Object.freeze(out);
+})();
+const dayOf = (w) => (Object.hasOwn(DAY_WORDS, w) ? DAY_WORDS[w] : null);
 const ALL = [0, 1, 2, 3, 4, 5, 6];
 
 /**
@@ -32,7 +44,7 @@ export function parseEvery(text) {
       if (w === "daily" || w === "every" || w === "day" || w === "everyday") days.push(...ALL);
       else if (w === "weekdays" || w === "weekday") days.push(1, 2, 3, 4, 5);
       else if (w === "weekends" || w === "weekend") days.push(0, 6);
-      else if (DAYS[w.slice(0, 3)] != null && /^[a-z]+s?$/.test(w)) days.push(DAYS[w.slice(0, 3)]);
+      else if (dayOf(w) != null) days.push(dayOf(w));
       else throw new Error(`Every: "${w}" in ${text} is not a day; say daily, weekdays, weekends, or day names`);
     }
     days = [...new Set(days)].sort((a, b) => a - b);
@@ -47,15 +59,23 @@ export function parseEvery(text) {
 // A day past the month's end runs on its last day, so "the 31st" is February's 28th or 29th. "By the 5th" is a
 // deadline: it runs on the 1st, and a schedule never run that was written before the deadline is owed at once.
 // Read only when the words name a day number, "last", "by" or an ordinal, none of which the clock grammar takes, so
-// every phrase that parsed before parses exactly as it did.
+// every phrase that parsed before parses exactly as it did, with one deliberate exception: a bare "monthly 09:00"
+// (no day), which the old prefix day reader took as Monday, is refused (0.3.1).
 const NTH = { first: 1, "1st": 1, second: 2, "2nd": 2, third: 3, "3rd": 3, fourth: 4, "4th": 4, last: -1 };
 const FILLER = new Set(["on", "the", "of", "every", "each", "month", "monthly", "at", "in", "a"]);
 const MONTHLY_MARK = /^(\d{1,2}(st|nd|rd|th)?|last|by|first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th)$/;
-const weekdayOf = (w) => (/^[a-z]+s?$/.test(w) && DAYS[w.slice(0, 3)] != null ? DAYS[w.slice(0, 3)] : null);
+const weekdayOf = dayOf;
+const MONTHLY_FORMS = '"on the 5th 09:00", "by the 5th 09:00", "last day of the month 09:00" or "second thursday 09:00"';
 
 function parseMonthly(head, text, hh, mm) {
   const words = head.split(/[\s,]+/).filter(Boolean);
-  if (!words.some((w) => MONTHLY_MARK.test(w))) return null;
+  if (!words.some((w) => MONTHLY_MARK.test(w))) {
+    // "monthly 09:00" names no day. It used to fall through to the clock grammar and run every Monday.
+    if (words.some((w) => w === "monthly" || w === "month" || w === "months")) {
+      throw new Error(`Every: ${text} says monthly but not which day of the month; say ${MONTHLY_FORMS}`);
+    }
+    return null;
+  }
   const w = words.filter((x) => !FILLER.has(x));
   const by = w[0] === "by";
   if (by) w.shift();

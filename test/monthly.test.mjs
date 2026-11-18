@@ -29,7 +29,6 @@ test("every phrase the clock grammar already took parses exactly as before", () 
   assert.deepEqual(parseEvery("daily 07:00"), { kind: "clock", days: [0, 1, 2, 3, 4, 5, 6], hh: 7, mm: 0 });
   assert.deepEqual(parseEvery("Mon, Thu 18:00"), { kind: "clock", days: [1, 4], hh: 18, mm: 0 });
   assert.deepEqual(parseEvery("every monday 09:00"), { kind: "clock", days: [0, 1, 2, 3, 4, 5, 6], hh: 9, mm: 0 });
-  assert.deepEqual(parseEvery("monthly 09:00"), { kind: "clock", days: [1], hh: 9, mm: 0 }, "an old reading, kept: a day word read by its first three letters");
   assert.deepEqual(parseEvery("3h"), { kind: "interval", ms: 3 * 3600e3 });
 });
 
@@ -101,4 +100,24 @@ test("due: a monthly rule once a month; 'by the 5th' made on the 3rd still runs 
   assert.equal(isDue(late, { now: at("2026-12-01", 9, 1) }), true);
   assert.equal(isDue(early, { now: at("2026-11-04", 9), attempt: { startedAt: at("2026-11-03", 12, 15).toISOString(), status: "ok" } }), false, "once a month");
   rmSync(d, { recursive: true, force: true });
+});
+
+// "monthly 09:00" (no day) parsed as every Monday: the clock's day reader took any word whose first three letters
+// were a day ("monthly" -> "mon"), so a bare monthly ran four times a month. A bare monthly now refuses, naming the
+// monthly forms, and a day name must be a whole word.
+test("a bare monthly with no day refuses, naming the monthly forms", () => {
+  for (const bare of ["monthly 09:00", "every month 09:00", "each month 09:00", "Monthly at 09:00"]) {
+    assert.throws(() => parseEvery(bare), (e) => /which day/.test(e.message) && /on the 5th/.test(e.message) && /second thursday/.test(e.message), bare);
+  }
+});
+
+test("a day name is a whole word, never the first three letters of another word", () => {
+  for (const bad of ["month 09:00", "sunrise 06:00", "sunset 18:00", "saturn 09:00", "satisfied 09:00", "wedding 15:00", "fridge 09:00", "thunder 09:00", "tuesdayish 09:00", "second monster 09:00", "last sunset 09:00"]) {
+    assert.throws(() => parseEvery(bad), /Every/, bad);
+  }
+  assert.deepEqual(parseEvery("mondays 09:00"), { kind: "clock", days: [1], hh: 9, mm: 0 });
+  assert.deepEqual(parseEvery("tues, thurs 09:00"), { kind: "clock", days: [2, 4], hh: 9, mm: 0 });
+  assert.deepEqual(parseEvery("sat, sun 10:00"), { kind: "clock", days: [0, 6], hh: 10, mm: 0 });
+  assert.deepEqual(parseEvery("wednesdays and fridays 12:00".replace(" and", ",")), { kind: "clock", days: [3, 5], hh: 12, mm: 0 });
+  assert.deepEqual(parseEvery("last sunday 09:00"), { kind: "monthly", nth: -1, weekday: 0, hh: 9, mm: 0 });
 });
