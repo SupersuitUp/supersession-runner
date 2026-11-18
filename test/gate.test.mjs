@@ -63,3 +63,14 @@ test("a timed-out gate logs exit=timeout and its limit", () => {
   assert.match(line, /exit=timeout after=300s/);
   assert.match(run.why, /timed out after 300s/);
 });
+
+// Windows has no /bin/sh that node can spawn, so every gate there came back as exit 127 and the job never ran.
+test("a gate runs through /bin/sh, and on Windows through the sh on PATH", () => {
+  const seen = [];
+  const spawn = (cmd, args) => { seen.push([cmd, ...args]); return { status: 0, stdout: "", stderr: "" }; };
+  assert.equal(shellGate({ command: "true", cwd, platform: "darwin", spawn }).code, 0);
+  assert.equal(shellGate({ command: "true", cwd, platform: "linux", spawn }).code, 0);
+  assert.equal(shellGate({ command: "true", cwd, platform: "win32", spawn }).code, 0);
+  assert.deepEqual(seen.map((c) => c[0]), ["/bin/sh", "/bin/sh", "sh"]);
+  assert.deepEqual(seen[2].slice(1), ["-c", "true"]);
+});
