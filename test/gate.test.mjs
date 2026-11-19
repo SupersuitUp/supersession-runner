@@ -10,6 +10,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { shellGate, createRunner, GATE_TIMEOUT_MS } from "../src/index.mjs";
+import { windowsSh } from "../src/runner.mjs";
 
 const cwd = mkdtempSync(join(tmpdir(), "supersessions-gate-"));
 
@@ -70,7 +71,21 @@ test("a gate runs through /bin/sh, and on Windows through the sh on PATH", () =>
   const spawn = (cmd, args) => { seen.push([cmd, ...args]); return { status: 0, stdout: "", stderr: "" }; };
   assert.equal(shellGate({ command: "true", cwd, platform: "darwin", spawn }).code, 0);
   assert.equal(shellGate({ command: "true", cwd, platform: "linux", spawn }).code, 0);
-  assert.equal(shellGate({ command: "true", cwd, platform: "win32", spawn }).code, 0);
-  assert.deepEqual(seen.map((c) => c[0]), ["/bin/sh", "/bin/sh", "sh"]);
+  assert.equal(shellGate({ command: "true", cwd, platform: "win32", spawn, env: { PATH: "C:\Windows" }, exists: () => false }).code, 0);
+  assert.deepEqual(seen.map((c) => c[0]), ["/bin/sh", "/bin/sh", "sh"], "no Git anywhere: the bare name");
   assert.deepEqual(seen[2].slice(1), ["-c", "true"]);
+});
+
+// Under Task Scheduler's PATH a bare "sh" is not found: Git for Windows puts only Git/cmd on PATH (measured 2026-11-18).
+const W = (s) => s.replace(/\//g, "\\");
+test("on Windows the gate finds Git's sh.exe off PATH: beside git.exe, then in Git's install folder", () => {
+  const has = (...files) => (p) => files.map(W).includes(p);
+  const env = { PATH: W("C:/Windows/system32;C:/Program Files/Git/cmd"), ProgramFiles: W("C:/Program Files") };
+  assert.equal(windowsSh({ env, exists: has("C:/Program Files/Git/cmd/git.exe", "C:/Program Files/Git/bin/sh.exe") }), W("C:/Program Files/Git/bin/sh.exe"));
+  assert.equal(windowsSh({ env: { PATH: W("C:/Windows"), ProgramFiles: W("C:/Program Files") }, exists: has("C:/Program Files/Git/usr/bin/sh.exe") }), W("C:/Program Files/Git/usr/bin/sh.exe"));
+  assert.equal(windowsSh({ env: { PATH: W("C:/tools"), LOCALAPPDATA: W("C:/Users/ada/AppData/Local") }, exists: has("C:/Users/ada/AppData/Local/Programs/Git/bin/sh.exe") }), W("C:/Users/ada/AppData/Local/Programs/Git/bin/sh.exe"));
+  assert.equal(windowsSh({ env: { PATH: W("C:/msys/usr/bin") }, exists: has("C:/msys/usr/bin/sh.exe") }), W("C:/msys/usr/bin/sh.exe"), "an sh on PATH wins");
+  const seen = [];
+  shellGate({ command: "true", cwd, platform: "win32", env, exists: has("C:/Program Files/Git/bin/sh.exe"), spawn: (c) => { seen.push(c); return { status: 0 }; } });
+  assert.deepEqual(seen, [W("C:/Program Files/Git/bin/sh.exe")]);
 });

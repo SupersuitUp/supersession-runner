@@ -10,7 +10,7 @@
 // A job is { id, kind, name, gate?, on?, at?, stamp?, ... } and the host's own fields. `jobs({ now })`
 // returns { due, all }: what should run now, and every job (for `only` and `done` to find).
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { delimiter, dirname } from "node:path";
+import { delimiter, dirname, win32 } from "node:path";
 import { spawnSync } from "node:child_process";
 
 export const MAX_SESSIONS = 3;
@@ -38,10 +38,28 @@ export const GATE_TIMEOUT_MS = 5 * 60 * 1000;
  * now 124 (what timeout(1) exits) with `timedOut: true`; a spawn that could not start at all
  * (no /bin/sh) is still 127.
  */
-export function shellGate({ command, cwd, env = process.env, timeoutMs = GATE_TIMEOUT_MS, platform = process.platform, spawn = spawnSync }) {
+/**
+ * Git for Windows' sh.exe. Its installer puts only Git\cmd on PATH by default, so under the PATH Task Scheduler gives a
+ * job a bare "sh" is not found (measured on a Windows 11 PC, 2026-11-18: exit 127, spawnSync sh ENOENT). Looked for on
+ * PATH first, then beside a git.exe on PATH (Git\cmd -> Git\bin), then in Git's install folders; "sh" when none.
+ */
+export function windowsSh({ env = process.env, exists = existsSync } = {}) {
+  const dirs = String(env.PATH || env.Path || "").split(";").filter(Boolean);
+  const roots = [env.ProgramFiles, env.ProgramW6432, env["ProgramFiles(x86)"], env.LOCALAPPDATA && win32.join(env.LOCALAPPDATA, "Programs")]
+    .filter(Boolean).map((r) => win32.join(r, "Git"));
+  const gitRoots = dirs.filter((d) => exists(win32.join(d, "git.exe"))).map((d) => win32.dirname(d));
+  const candidates = [
+    ...dirs.map((d) => win32.join(d, "sh.exe")),
+    ...[...gitRoots, ...roots].flatMap((g) => [win32.join(g, "bin", "sh.exe"), win32.join(g, "usr", "bin", "sh.exe")]),
+  ];
+  return candidates.find((p) => exists(p)) ?? "sh";
+}
+
+export function shellGate({ command, cwd, env = process.env, timeoutMs = GATE_TIMEOUT_MS, platform = process.platform, spawn = spawnSync, exists = existsSync }) {
   const PATH = [dirname(process.execPath), env.PATH].filter(Boolean).join(delimiter);
-  // Windows has no /bin/sh that node can start; Git Bash's sh is found on PATH.
-  const r = spawn(platform === "win32" ? "sh" : "/bin/sh", ["-c", command], { cwd, encoding: "utf8", timeout: timeoutMs, env: { ...env, PATH } });
+  // Windows has no /bin/sh that node can start; Git for Windows' sh.exe is found, on PATH or where Git installs it.
+  // Where Git is installed is the machine's, not the job's: its folders come from this process when the job's env lacks them.
+  const r = spawn(platform === "win32" ? windowsSh({ env: { ...process.env, ...env }, exists }) : "/bin/sh", ["-c", command], { cwd, encoding: "utf8", timeout: timeoutMs, env: { ...env, PATH } });
   const out = String(r.stdout || ""), err = String(r.stderr || "");
   if (r.error?.code === "ETIMEDOUT" || (r.status === null && r.signal && r.error)) return { code: 124, out, err, timedOut: true, timeoutMs };
   return { code: r.status ?? (r.error ? 127 : 1), out, err: err || (r.error ? String(r.error.message || r.error) : "") };
