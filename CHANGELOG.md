@@ -3,7 +3,8 @@
 ## Unreleased
 
 - A gate now runs on Windows. `shellGate` started `/bin/sh`, which node cannot start there, so every gated job
-  came back as exit 127 and never ran. On Windows it uses the `sh` on PATH (Git Bash).
+  came back as exit 127 and never ran. On Windows it finds Git for Windows' `sh.exe`: on PATH, beside a `git.exe`
+  on PATH, or in Git's install folders, because Task Scheduler's PATH holds only `Git\cmd`.
 
 ## 0.3.1 (2026-11-17)
 
